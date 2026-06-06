@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 const Groq = require("groq-sdk");
 const { v4: uuidv4 } = require("uuid");
 
@@ -11,13 +11,9 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "chatbot_db",
-  waitForConnections: true,
-  connectionLimit: 10,
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -26,7 +22,7 @@ async function initDB() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS chat_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         session_id VARCHAR(255) NOT NULL,
         user_message TEXT NOT NULL,
         bot_response TEXT NOT NULL,
@@ -55,23 +51,23 @@ app.post("/api/chat", async (req, res) => {
     });
     const botResponse = completion.choices[0].message.content;
     await pool.query(
-      "INSERT INTO chat_history (session_id, user_message, bot_response) VALUES (?, ?, ?)",
+      "INSERT INTO chat_history (session_id, user_message, bot_response) VALUES ($1, $2, $3)",
       [sid, message, botResponse]
     );
     res.json({ response: botResponse, session_id: sid });
   } catch (err) {
-    console.error("Chat error:", err.message);
+    console.error("Chat error:", err);
     res.status(500).json({ error: "Failed to process message." });
   }
 });
 
 app.get("/api/history/:session_id", async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT * FROM chat_history WHERE session_id = ? ORDER BY created_at ASC",
+    const result = await pool.query(
+      "SELECT * FROM chat_history WHERE session_id = $1 ORDER BY created_at ASC",
       [req.params.session_id]
     );
-    res.json(rows);
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: "Failed to retrieve history." });
   }
