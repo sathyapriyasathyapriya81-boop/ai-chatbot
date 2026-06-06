@@ -210,3 +210,4 @@ npm start              # opens http://localhost:3000
 - [ ] `FRONTEND_URL` set in Railway to prevent open CORS
 - [ ] `DATABASE_URL` uses SSL in production (`rejectUnauthorized: false` for Railway)
 - [ ] GitHub Actions secrets configured: `DATABASE_URL`, `OPENAI_API_KEY`, `RAILWAY_TOKEN`
+ 
